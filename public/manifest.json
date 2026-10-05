@@ -1,0 +1,61 @@
+{
+  "name": "TT Digital — Tunisie Telecom",
+  "short_name": "TT Digital",
+  "description": "Solutions télécom innovantes : Internet fibre, mobile, TV et entreprise.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0E0E0E",
+  "theme_color": "#6843EC",
+  "orientation": "any",
+  "lang": "fr",
+  "dir": "ltr",
+  "categories": ["business", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Tableau de bord",
+      "short_name": "Dashboard",
+      "description": "Accéder au tableau de bord",
+      "url": "/dashboard",
+      "icons": [
+        { "src": "/icons/dashboard-96.png", "sizes": "96x96", "type": "image/png" }
+      ]
+    },
+    {
+      "name": "Réclamations",
+      "short_name": "Réclamations",
+      "description": "Vos réclamations",
+      "url": "/reclamations",
+      "icons": [
+        { "src": "/icons/reclamations-96.png", "sizes": "96x96", "type": "image/png" }
+      ]
+    },
+    {
+      "name": "Factures",
+      "short_name": "Factures",
+      "description": "Consulter vos factures",
+      "url": "/factures",
+      "icons": [
+        { "src": "/icons/factures-96.png", "sizes": "96x96", "type": "image/png" }
+      ]
+    }
+  ],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

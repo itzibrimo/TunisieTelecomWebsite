@@ -1,0 +1,158 @@
+"use client";
+
+/* =============================================================================
+ * app/reclamations/page.tsx — Liste des réclamations du client
+ *
+ * Affiche toutes les réclamations du client connecté depuis Firestore.
+ * Permet de naviguer vers le détail de chaque réclamation.
+ * Lien vers la création d'une nouvelle réclamation.
+ * ============================================================================= */
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import Container from "@/components/ui/Container";
+import Card from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
+import Badge from "@/components/ui/Badge";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useUser } from "@/lib/hooks/useUser";
+import { getUserReclamations } from "@/lib/services/firestore.service";
+import type { Reclamation } from "@/lib/types";
+
+const fadeUp = { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] as const } } };
+const stagger = { visible: { transition: { staggerChildren: 0.05 } } };
+
+const STATUS_CONFIG: Record<string, { label: string; variant: "brand" | "info" | "success" | "default"; icon: string }> = {
+  new: { label: "Nouvelle", variant: "brand", icon: "✉️" },
+  in_progress: { label: "En cours", variant: "info", icon: "🔧" },
+  resolved: { label: "Résolue", variant: "success", icon: "✅" },
+  closed: { label: "Fermée", variant: "default", icon: "🔒" },
+};
+
+function formatDate(date: unknown): string {
+  if (!date) return "—";
+  const d = (date as { toDate?: () => Date })?.toDate?.() ?? new Date(date as string | number);
+  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+export default function ReclamationsListPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useUser();
+  const [reclamations, setReclamations] = useState<Reclamation[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!authLoading && !user) router.push("/login");
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
+    if (user) {
+      getUserReclamations(user.uid)
+        .then(setReclamations)
+        .catch(console.error)
+        .finally(() => setLoading(false));
+    }
+  }, [user]);
+
+  if (authLoading || !user) {
+    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-4 border-brand-500 border-t-transparent rounded-full" /></div>;
+  }
+
+  return (
+    <div className="min-h-screen pt-24 pb-20 bg-surface dark:bg-surface-2">
+      <Container>
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] as const }}
+          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8"
+        >
+          <div>
+            <h1 className="font-[family-name:var(--font-display)] text-2xl md:text-3xl font-bold text-foreground">
+              Mes Réclamations
+            </h1>
+            <p className="text-sm text-muted mt-1">
+              {loading ? "Chargement..." : `${reclamations.length} réclamation${reclamations.length !== 1 ? "s" : ""}`}
+            </p>
+          </div>
+          <Button asLink href="/reclamations/new" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>}>
+            Nouvelle réclamation
+          </Button>
+        </motion.div>
+
+        {/* Content */}
+        {loading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-2xl border border-border/60 bg-white dark:bg-surface p-5">
+                <div className="flex items-center gap-4">
+                  <Skeleton className="h-10 w-10 rounded-xl flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-1/3" />
+                    <Skeleton className="h-3 w-2/3" />
+                  </div>
+                  <Skeleton className="h-6 w-20 rounded-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : reclamations.length === 0 ? (
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4 }}>
+            <Card className="p-12 text-center max-w-md mx-auto">
+              <div className="w-16 h-16 rounded-2xl bg-brand-50 dark:bg-brand-500/10 flex items-center justify-center mx-auto mb-4">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-brand-500">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="12" y1="18" x2="12" y2="12" />
+                  <line x1="9" y1="15" x2="15" y2="15" />
+                </svg>
+              </div>
+              <h3 className="font-[family-name:var(--font-display)] font-semibold text-lg text-foreground mb-2">
+                Aucune réclamation
+              </h3>
+              <p className="text-sm text-muted mb-6">
+                Vous n&apos;avez pas encore soumis de réclamation.
+              </p>
+              <Button asLink href="/reclamations/new" size="sm">
+                Créer une réclamation
+              </Button>
+            </Card>
+          </motion.div>
+        ) : (
+          <motion.div variants={stagger} initial="hidden" animate="visible" className="space-y-3">
+            {reclamations.map((rec) => {
+              const status = STATUS_CONFIG[rec.status] || STATUS_CONFIG.new;
+              return (
+                <motion.div key={rec.id} variants={fadeUp}>
+                  <Link href={`/reclamations/${rec.id}`}>
+                    <Card variant="interactive" className="p-5">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-brand-50 dark:bg-brand-500/10 flex items-center justify-center text-lg flex-shrink-0">
+                          {status.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-semibold text-sm text-foreground truncate">{rec.subject}</h3>
+                            <Badge variant={status.variant} dot>{status.label}</Badge>
+                          </div>
+                          <p className="text-xs text-muted truncate">{rec.message}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{formatDate(rec.createdAt)}</p>
+                        </div>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-muted-foreground flex-shrink-0">
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      </div>
+                    </Card>
+                  </Link>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        )}
+      </Container>
+    </div>
+  );
+}

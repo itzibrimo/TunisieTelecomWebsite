@@ -1,0 +1,193 @@
+/**
+ * =============================================================================
+ * FIREBASE STORAGE SECURITY RULES - Production Grade
+ * =============================================================================
+ * 
+ * Règles de sécurité pour Firebase Storage
+ * 
+ * Structure des chemins:
+ * - /users/{userId}/avatar/*        - Photos de profil
+ * - /reclamations/{reclamationId}/* - Pièces jointes réclamations
+ * - /tickets/{ticketId}/*           - Pièces jointes tickets support
+ * 
+ * Restrictions:
+ * - Taille maximale: 5MB
+ * - Types MIME autorisés: images (JPEG, PNG, WebP), PDF, documents
+ * - Ownership vérifié
+ * - Validation du format et de la taille
+ * =============================================================================
+ */
+
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // =========================================================================
+    // FONCTIONS HELPER
+    // =========================================================================
+    
+    // Vérifier si l'utilisateur est authentifié
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Récupérer le rôle de l'utilisateur
+    function getUserRole() {
+      return request.auth.token.role;
+    }
+    
+    // Vérifier si l'utilisateur est admin
+    function isAdmin() {
+      let role = getUserRole();
+      return role == 'admin' || role == 'superadmin';
+    }
+    
+    // Vérifier si l'utilisateur est support
+    function isSupport() {
+      let role = getUserRole();
+      return role == 'support' || role == 'moderator' || role == 'admin' || role == 'superadmin';
+    }
+    
+    // Vérifier si c'est le propriétaire
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Valider la taille du fichier (max 5MB)
+    function isValidSize() {
+      return request.resource.size <= 5 * 1024 * 1024;
+    }
+    
+    // Valider le type MIME (images et documents)
+    function isValidImageType() {
+      return request.resource.contentType.matches('image/(jpeg|png|webp|gif)');
+    }
+    
+    function isValidDocumentType() {
+      return request.resource.contentType.matches('image/(jpeg|png|webp|gif)')
+        || request.resource.contentType.matches('application/pdf')
+        || request.resource.contentType.matches('application/(msword|vnd\\.openxmlformats-officedocument\\.wordprocessingml\\.document)')
+        || request.resource.contentType.matches('application/(vnd\\.ms-excel|vnd\\.openxmlformats-officedocument\\.spreadsheetml\\.sheet)');
+    }
+    
+    // =========================================================================
+    // AVATARS UTILISATEURS: /users/{userId}/avatar/*
+    // =========================================================================
+    
+    match /users/{userId}/avatar/{fileName} {
+      // Lecture: utilisateur propriétaire OU admin
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      
+      // Upload: utilisateur propriétaire seulement
+      // Restrictions: images seulement, max 5MB
+      allow create: if isAuthenticated() 
+        && isOwner(userId)
+        && isValidImageType()
+        && isValidSize();
+      
+      // Mise à jour: utilisateur propriétaire seulement
+      allow update: if isAuthenticated() 
+        && isOwner(userId)
+        && isValidImageType()
+        && isValidSize();
+      
+      // Suppression: utilisateur propriétaire OU admin
+      allow delete: if isAuthenticated() && (isOwner(userId) || isAdmin());
+    }
+    
+    // =========================================================================
+    // PIÈCES JOINTES RÉCLAMATIONS: /reclamations/{reclamationId}/*
+    // =========================================================================
+    
+    match /reclamations/{reclamationId}/{fileName} {
+      // Lecture:
+      // - Propriétaire de la réclamation via Firestore lookup
+      // - Support et au-dessus
+      allow read: if isAuthenticated() && (
+        isSupport()
+        || (isOwner(resource.metadata.uploadedBy) if resource != null)
+      );
+      
+      // Upload: utilisateurs authentifiés
+      // Metadata 'uploadedBy' doit être défini
+      allow create: if isAuthenticated()
+        && isValidDocumentType()
+        && isValidSize()
+        && request.resource.metadata.uploadedBy == request.auth.uid;
+      
+      // Mise à jour: propriétaire du fichier OU admin
+      allow update: if isAuthenticated() && (
+        (resource.metadata.uploadedBy == request.auth.uid)
+        || isAdmin()
+      );
+      
+      // Suppression: propriétaire du fichier OU admin
+      allow delete: if isAuthenticated() && (
+        (resource.metadata.uploadedBy == request.auth.uid)
+        || isAdmin()
+      );
+    }
+    
+    // =========================================================================
+    // PIÈCES JOINTES TICKETS SUPPORT: /tickets/{ticketId}/*
+    // =========================================================================
+    
+    match /tickets/{ticketId}/{fileName} {
+      // Lecture:
+      // - Propriétaire du ticket
+      // - Support et au-dessus
+      allow read: if isAuthenticated() && (
+        isSupport()
+        || (isOwner(resource.metadata.uploadedBy) if resource != null)
+      );
+      
+      // Upload: utilisateurs authentifiés
+      allow create: if isAuthenticated()
+        && isValidDocumentType()
+        && isValidSize()
+        && request.resource.metadata.uploadedBy == request.auth.uid;
+      
+      // Mise à jour: propriétaire du fichier OU support
+      allow update: if isAuthenticated() && (
+        (resource.metadata.uploadedBy == request.auth.uid)
+        || isSupport()
+      );
+      
+      // Suppression: propriétaire du fichier OU admin
+      allow delete: if isAuthenticated() && (
+        (resource.metadata.uploadedBy == request.auth.uid)
+        || isAdmin()
+      );
+    }
+    
+    // =========================================================================
+    // FICHIERS TEMPORAIRES: /temp/{userId}/*
+    // =========================================================================
+    
+    match /temp/{userId}/{fileName} {
+      // Lecture: utilisateur propriétaire seulement
+      allow read: if isAuthenticated() && isOwner(userId);
+      
+      // Upload: utilisateur propriétaire seulement
+      // Fichiers temporaires expirent après 24h (géré par Cloud Function)
+      allow create: if isAuthenticated() 
+        && isOwner(userId)
+        && isValidDocumentType()
+        && isValidSize();
+      
+      // Mise à jour: utilisateur propriétaire seulement
+      allow update: if isAuthenticated() && isOwner(userId);
+      
+      // Suppression: utilisateur propriétaire seulement
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+    
+    // =========================================================================
+    // DEFAULT: Deny all pour tous les autres chemins
+    // =========================================================================
+    
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

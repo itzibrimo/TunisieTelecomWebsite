@@ -1,36 +1,114 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Gestion des Réclamations Clients - Tunisie Telecom
 
-## Getting Started
+Projet de stage : Application complète de gestion des réclamations clients pour Tunisie Telecom.
 
-First, run the development server:
+## Architecture du projet
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+gestion-reclamations-tt/
+├── mobile/          → Application Flutter (clients)
+├── dashboard/       → Dashboard React + Tailwind CSS (admin/techniciens)
+└── README.md
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Structure de données
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Collection **"reclamations"** :
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Champ         | Type     | Description                          |
+|---------------|----------|--------------------------------------|
+| id            | String   | Identifiant unique                   |
+| client_nom    | String   | Nom complet du client                |
+| client_email  | String   | Email du client                      |
+| type          | String   | Panne Internet / Panne Ligne Fixe / Problème Facturation / Autre |
+| description   | String   | Description détaillée du problème    |
+| date          | DateTime | Date de création                     |
+| statut        | String   | En attente / En cours / Résolue      |
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 1. Application Mobile (Flutter)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Prérequis
+- Flutter SDK >= 3.0 installé ([guide d'installation](https://docs.flutter.dev/get-started/install))
+- Android Studio ou VS Code avec l'extension Flutter
+- Un émulateur Android/iOS ou un appareil physique
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Installation et lancement
 
-## Deploy on Vercel
+```bash
+# Accéder au dossier mobile
+cd mobile
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Installer les dépendances
+flutter pub get
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Lancer sur un émulateur ou appareil connecté
+flutter run
+```
+
+### Comptes de test
+
+| Email          | Mot de passe | Nom             |
+|----------------|-------------|-----------------|
+| client@tt.tn   | 123456      | Ahmed Ben Ali   |
+| sara@tt.tn     | 123456      | Sara Mansouri   |
+| test@test.com  | test123     | Utilisateur Test |
+
+### Fonctionnalités
+- Connexion / Inscription (authentification simulée)
+- Liste des réclamations du client connecté
+- Création d'une nouvelle réclamation (type + description)
+- Suivi du statut avec timeline visuelle
+- Design aux couleurs de Tunisie Telecom (rouge/orange/violet)
+
+---
+
+## 2. Dashboard Web (React + Tailwind CSS)
+
+### Prérequis
+- Node.js >= 18 installé ([télécharger](https://nodejs.org))
+- npm (inclus avec Node.js)
+
+### Installation et lancement
+
+```bash
+# Accéder au dossier dashboard
+cd dashboard
+
+# Installer les dépendances
+npm install
+
+# Lancer le serveur de développement
+npm run dev
+```
+
+Le dashboard sera accessible sur `http://localhost:5173`
+
+### Fonctionnalités
+- Tableau de bord avec statistiques (cartes + graphiques)
+- Liste complète des réclamations avec filtres (statut, type, recherche)
+- Changement de statut : En attente → En cours → Résolue
+- Interface responsive et professionnelle
+
+---
+
+## Notes pour le rapport de stage
+
+### Technologie utilisées
+- **Mobile** : Flutter (Dart) - framework multiplateforme de Google
+- **Web** : React.js + Tailwind CSS + Vite.js
+- **Graphiques** : Recharts (bibliothèque de graphiques React)
+- **Données** : Mock data en local (simulant Firebase Firestore)
+
+### Pour passer en production avec Firebase
+1. Créer un projet Firebase sur [console.firebase.google.com](https://console.firebase.google.com)
+2. Activer Firestore Database
+3. **Mobile** : Ajouter `cloud_firestore` et `firebase_core` dans `pubspec.yaml`, configurer avec FlutterFire CLI
+4. **Web** : Ajouter `firebase` dans `package.json`, initialiser avec la config Firebase
+
+### Workflow des statuts
+```
+En attente  →  En cours  →  Résolue
+(client crée)  (technicien)  (technicien)
+```

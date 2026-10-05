@@ -1,0 +1,24 @@
+# Firebase Functions
+functions/node_modules/
+functions/lib/
+functions/.env
+
+# Firebase cache
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+
+# Emulators
+*-debug.log
+*.log
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

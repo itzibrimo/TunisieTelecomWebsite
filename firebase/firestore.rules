@@ -1,0 +1,237 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // =========================================================================
+    // FONCTIONS HELPER
+    // =========================================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserRole() {
+      return request.auth.token.role is string ? request.auth.token.role : 'customer';
+    }
+    
+    function hasMinimumRole(minRole) {
+      let roleLevel = {
+        'customer': 1,
+        'support': 2,
+        'moderator': 3,
+        'admin': 4,
+        'superadmin': 5
+      };
+      return isAuthenticated() && (roleLevel[getUserRole()] >= roleLevel[minRole]);
+    }
+    
+    function isAdmin() {
+      return hasMinimumRole('admin');
+    }
+    
+    function isSupport() {
+      return hasMinimumRole('support');
+    }
+    
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+    
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function noForbiddenFields(forbiddenFields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(forbiddenFields);
+    }
+    
+    // =========================================================================
+    // COLLECTION: users
+    // =========================================================================
+    
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      
+      allow create: if isOwner(userId)
+        && hasRequiredFields(['email', 'name']);
+      
+      allow update: if isOwner(userId)
+        && noForbiddenFields(['role', 'email', 'createdAt', 'uid']);
+      
+      allow delete: if false;
+      
+      // Sous-collection: loginHistory
+      match /loginHistory/{loginId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if false;
+      }
+      
+      // Sous-collection: notifications
+      match /notifications/{notificationId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && hasRequiredFields(['type', 'title', 'message', 'read', 'createdAt']);
+        allow update: if isOwner(userId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        allow delete: if isOwner(userId);
+      }
+      
+      // Sous-collection: invoices
+      match /invoices/{invoiceId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId) || isAdmin();
+        allow update: if isOwner(userId) || isAdmin();
+        allow delete: if isAdmin();
+      }
+      
+      // Sous-collection: activity
+      match /activity/{activityId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId);
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+      
+      // Sous-collection: reclamations (per-user)
+      match /reclamations/{reclamationId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId);
+        allow update: if isOwner(userId) || isAdmin();
+        allow delete: if isAdmin();
+      }
+      
+      // Sous-collection: sessions (device tracking)
+      match /sessions/{sessionId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow create: if isOwner(userId)
+          && hasRequiredFields(['sessionId', 'os', 'browser', 'device', 'createdAt', 'lastActiveAt']);
+        allow update: if isOwner(userId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastActiveAt']);
+        allow delete: if isOwner(userId);
+      }
+    }
+    
+    // =========================================================================
+    // COLLECTION: reclamations
+    // =========================================================================
+    
+    match /reclamations/{reclamationId} {
+      allow read: if isAuthenticated() && (
+        isOwner(resource.data.userId) || isSupport()
+      );
+      
+      allow create: if isAuthenticated()
+        && hasRequiredFields(['userId', 'name', 'email', 'subject', 'message', 'status'])
+        && isOwner(request.resource.data.userId)
+        && request.resource.data.status == 'new';
+      
+      allow update: if isAuthenticated() && (
+        (isSupport() && noForbiddenFields(['userId', 'createdAt']))
+        || (isOwner(resource.data.userId) 
+            && request.resource.data.status == 'closed' 
+            && noForbiddenFields(['userId', 'createdAt']))
+      );
+      
+      allow delete: if isAdmin();
+    }
+    
+    // =========================================================================
+    // COLLECTION: supportTickets
+    // =========================================================================
+    
+    match /supportTickets/{ticketId} {
+      allow read: if isAuthenticated() && (
+        isOwner(resource.data.userId) || isSupport()
+      );
+      
+      allow create: if isAuthenticated()
+        && hasRequiredFields(['userId', 'subject', 'description'])
+        && isOwner(request.resource.data.userId);
+      
+      allow update: if isAuthenticated() && (
+        isSupport() || isOwner(resource.data.userId)
+      );
+      
+      allow delete: if isAdmin();
+    }
+    
+    // =========================================================================
+    // COLLECTION: renseignements (demandes de renseignement)
+    // =========================================================================
+    // Mêmes règles que les réclamations : un utilisateur authentifié peut créer,
+    // lire ses propres renseignements, et le support peut les gérer.
+    
+    match /renseignements/{renseignementId} {
+      allow read: if isAuthenticated() && (
+        isOwner(resource.data.userId) || isSupport()
+      );
+      
+      allow create: if isAuthenticated()
+        && hasRequiredFields(['userId', 'name', 'email', 'subject', 'message', 'status'])
+        && isOwner(request.resource.data.userId)
+        && request.resource.data.status == 'new';
+      
+      allow update: if isAuthenticated() && (
+        (isSupport() && noForbiddenFields(['userId', 'createdAt']))
+        || (isOwner(resource.data.userId)
+            && request.resource.data.status == 'closed'
+            && noForbiddenFields(['userId', 'createdAt']))
+      );
+      
+      allow delete: if isAdmin();
+    }
+    
+    // =========================================================================
+    // COLLECTION: efacture_subscriptions (inscription e-Facture)
+    // =========================================================================
+    // Un utilisateur authentifié peut s'inscrire à e-Facture et consulter ses
+    // propres abonnements. Le support/admin peuvent consulter tous les abonnements.
+    
+    match /efacture_subscriptions/{subscriptionId} {
+      allow read: if isAuthenticated() && (
+        isOwner(resource.data.uid) || isSupport()
+      );
+      
+      allow create: if isAuthenticated()
+        && hasRequiredFields(['phone', 'email'])
+        && isOwner(request.resource.data.uid);
+      
+      allow update: if isAuthenticated() && (
+        isOwner(resource.data.uid) || isSupport()
+      );
+      
+      allow delete: if isAdmin() || isOwner(resource.data.uid);
+    }
+    
+    // =========================================================================
+    // COLLECTION: settings
+    // =========================================================================
+    
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // =========================================================================
+    // COLLECTION: analytics (session cleanup stats, etc.)
+    // =========================================================================
+    
+    match /analytics/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+      
+      match /daily/{entryId} {
+        allow read: if isAuthenticated();
+        allow write: if false;
+      }
+    }
+    
+    // =========================================================================
+    // DEFAULT: Deny all
+    // =========================================================================
+    
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
